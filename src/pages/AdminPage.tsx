@@ -13,13 +13,7 @@ import {
   UserSearch,
   TrendingUp,
   DollarSign,
-  Stethoscope,
-  Filter,
-  SortAsc,
-  SortDesc,
-  RefreshCw,
-  Download,
-  FileText
+  Stethoscope
 } from 'lucide-react';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
@@ -60,11 +54,6 @@ export const AdminPage: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [departmentFilter, setDepartmentFilter] = useState('');
-  const [sortBy, setSortBy] = useState<'stn' | 'created_at' | 'name'>('stn');
-  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
-  const [showFilters, setShowFilters] = useState(false);
-  const [dateFilter, setDateFilter] = useState('');
-  const [paymentFilter, setPaymentFilter] = useState('');
   const [loginForm, setLoginForm] = useState({ email: '', password: '' });
   const [loginLoading, setLoginLoading] = useState(false);
   const [error, setError] = useState('');
@@ -114,36 +103,6 @@ export const AdminPage: React.FC = () => {
     }
   });
 
-  // Export data functionality
-  const exportToCSV = () => {
-    const csvData = filteredVisits.map(visit => ({
-      'Token': visit.stn,
-      'Patient Name': visit.patient?.name || '',
-      'Patient ID': visit.patient?.uid || '',
-      'Phone': visit.patient?.phone || '',
-      'Age': visit.patient?.age || '',
-      'Department': visit.department,
-      'Status': visit.status,
-      'Payment Status': visit.payment_status,
-      'Booking Time': formatTime(visit.created_at),
-      'Check-in Time': visit.checked_in_at ? formatTime(visit.checked_in_at) : '',
-      'Completion Time': visit.completed_at ? formatTime(visit.completed_at) : '',
-      'Doctor': visit.doctor?.name || ''
-    }));
-
-    const csvContent = [
-      Object.keys(csvData[0] || {}).join(','),
-      ...csvData.map(row => Object.values(row).map(val => `"${val}"`).join(','))
-    ].join('\n');
-
-    const blob = new Blob([csvContent], { type: 'text/csv' });
-    const url = window.URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `queue-data-${new Date().toISOString().split('T')[0]}.csv`;
-    link.click();
-    window.URL.revokeObjectURL(url);
-  };
   // If not authenticated, show login form
   if (!authLoading && !user) {
     return (
@@ -412,7 +371,7 @@ export const AdminPage: React.FC = () => {
   };
 
   // Filter visits based on search and filters
-  const filteredAndSortedVisits = visits.filter(visit => {
+  const filteredVisits = visits.filter(visit => {
     const matchesSearch = !searchQuery || 
       visit.stn.toString().includes(searchQuery) ||
       visit.patient?.uid.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -421,35 +380,8 @@ export const AdminPage: React.FC = () => {
 
     const matchesStatus = !statusFilter || visit.status === statusFilter;
     const matchesDepartment = !departmentFilter || visit.department === departmentFilter;
-    const matchesDate = !dateFilter || visit.visit_date === dateFilter;
-    const matchesPayment = !paymentFilter || visit.payment_status === paymentFilter;
 
-    return matchesSearch && matchesStatus && matchesDepartment && matchesDate && matchesPayment;
-  }).sort((a, b) => {
-    let aValue, bValue;
-    
-    switch (sortBy) {
-      case 'stn':
-        aValue = a.stn;
-        bValue = b.stn;
-        break;
-      case 'created_at':
-        aValue = new Date(a.created_at).getTime();
-        bValue = new Date(b.created_at).getTime();
-        break;
-      case 'name':
-        aValue = a.patient?.name || '';
-        bValue = b.patient?.name || '';
-        break;
-      default:
-        return 0;
-    }
-    
-    if (sortOrder === 'asc') {
-      return aValue > bValue ? 1 : -1;
-    } else {
-      return aValue < bValue ? 1 : -1;
-    }
+    return matchesSearch && matchesStatus && matchesDepartment;
   });
 
   const departments = Array.from(new Set(visits.map(v => v.department)));
@@ -468,13 +400,6 @@ export const AdminPage: React.FC = () => {
     { value: 'expired', label: 'Expired' },
   ];
 
-  const paymentOptions = [
-    { value: '', label: 'All Payments' },
-    { value: 'paid', label: 'Paid' },
-    { value: 'pending', label: 'Pending' },
-    { value: 'pay_at_clinic', label: 'Pay at Clinic' },
-    { value: 'refunded', label: 'Refunded' },
-  ];
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
@@ -509,15 +434,6 @@ export const AdminPage: React.FC = () => {
                   <option value={60}>60s</option>
                 </select>
               </div>
-              <Button 
-                onClick={() => refetch()}
-                variant="outline"
-                size="sm"
-                disabled={queueLoading}
-              >
-                <RefreshCw className={`mr-2 h-4 w-4 ${queueLoading ? 'animate-spin' : ''}`} />
-                Refresh
-              </Button>
               <Button 
                 onClick={() => setShowScanner(true)}
                 size="sm"
@@ -559,36 +475,6 @@ export const AdminPage: React.FC = () => {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Success/Error Messages */}
-        {success && (
-          <div className="mb-6 bg-green-50 border border-green-200 rounded-lg p-4">
-            <div className="flex items-center">
-              <CheckCircle className="h-5 w-5 text-green-500 mr-2" />
-              <p className="text-green-800">{success}</p>
-              <button 
-                onClick={() => setSuccess('')}
-                className="ml-auto text-green-600 hover:text-green-800"
-              >
-                ×
-              </button>
-            </div>
-          </div>
-        )}
-
-        {error && (
-          <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4">
-            <div className="flex items-center">
-              <AlertTriangle className="h-5 w-5 text-red-500 mr-2" />
-              <p className="text-red-800">{error}</p>
-              <button 
-                onClick={() => setError('')}
-                className="ml-auto text-red-600 hover:text-red-800"
-              >
-                ×
-              </button>
-            </div>
-          </div>
-        )}
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-6 gap-6 mb-8">
           <Card>
@@ -738,29 +624,6 @@ export const AdminPage: React.FC = () => {
         {/* Filters */}
         <Card className="mb-8">
           <CardContent className="pt-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-gray-900">Queue Management</h3>
-              <div className="flex space-x-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setShowFilters(!showFilters)}
-                >
-                  <Filter className="h-4 w-4 mr-2" />
-                  {showFilters ? 'Hide Filters' : 'Show Filters'}
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={exportToCSV}
-                  disabled={filteredAndSortedVisits.length === 0}
-                >
-                  <Download className="h-4 w-4 mr-2" />
-                  Export CSV
-                </Button>
-              </div>
-            </div>
-
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <Input
                 placeholder="Search by STN, UID, name, or phone..."
@@ -781,70 +644,13 @@ export const AdminPage: React.FC = () => {
                 placeholder="Filter by department"
               />
             </div>
-
-            {showFilters && (
-              <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mt-4 pt-4 border-t border-gray-200">
-                <Input
-                  type="date"
-                  value={dateFilter}
-                  onChange={(e) => setDateFilter(e.target.value)}
-                  placeholder="Filter by date"
-                />
-                <Select
-                  options={paymentOptions}
-                  value={paymentFilter}
-                  onChange={(e) => setPaymentFilter(e.target.value)}
-                  placeholder="Filter by payment"
-                />
-                <Select
-                  options={[
-                    { value: 'stn', label: 'Sort by Token' },
-                    { value: 'created_at', label: 'Sort by Time' },
-                    { value: 'name', label: 'Sort by Name' }
-                  ]}
-                  value={sortBy}
-                  onChange={(e) => setSortBy(e.target.value as any)}
-                />
-                <Button
-                  variant="outline"
-                  onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
-                  className="flex items-center justify-center"
-                >
-                  {sortOrder === 'asc' ? <SortAsc className="h-4 w-4" /> : <SortDesc className="h-4 w-4" />}
-                  {sortOrder === 'asc' ? 'Ascending' : 'Descending'}
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    setSearchQuery('');
-                    setStatusFilter('');
-                    setDepartmentFilter('');
-                    setDateFilter('');
-                    setPaymentFilter('');
-                    setSortBy('stn');
-                    setSortOrder('asc');
-                  }}
-                >
-                  Clear All
-                </Button>
-              </div>
-            )}
-
-            <div className="mt-4 text-sm text-gray-600">
-              Showing {filteredAndSortedVisits.length} of {visits.length} visits
-            </div>
           </CardContent>
         </Card>
 
         {/* Queue Table */}
         <Card>
           <CardHeader>
-            <div className="flex items-center justify-between">
-              <h2 className="text-xl font-semibold text-gray-900">{t('todays_queue')}</h2>
-              <div className="text-sm text-gray-600">
-                Last updated: {formatTime(new Date().toISOString())}
-              </div>
-            </div>
+            <h2 className="text-xl font-semibold text-gray-900">{t('todays_queue')}</h2>
           </CardHeader>
           <CardContent>
             <div className="overflow-x-auto">
@@ -875,7 +681,7 @@ export const AdminPage: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {filteredAndSortedVisits.map((visit) => (
+                  {filteredVisits.map((visit) => (
                     <tr key={visit.id} className="hover:bg-gray-50">
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-lg font-bold text-gray-900">#{visit.stn}</div>
@@ -895,21 +701,13 @@ export const AdminPage: React.FC = () => {
                           </button>
                         </div>
                         <div className="text-sm text-gray-500">
-                          Age: {visit.patient?.age} | 
-                          <a href={`tel:${visit.patient?.phone}`} className="text-blue-600 hover:underline ml-1">
-                            {visit.patient?.phone}
-                          </a>
+                          Age: {visit.patient?.age} | {visit.patient?.phone}
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span className="text-sm text-gray-900 capitalize">
                           {visit.department}
                         </span>
-                        {visit.doctor && (
-                          <div className="text-xs text-gray-500">
-                            Dr. {visit.doctor.name}
-                          </div>
-                        )}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full border ${getStatusColor(visit.status)}`}>
@@ -924,11 +722,6 @@ export const AdminPage: React.FC = () => {
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         <div>{formatTime(visit.created_at)}</div>
                         <div>{formatRelativeTime(visit.created_at)}</div>
-                        {visit.checked_in_at && (
-                          <div className="text-xs text-green-600">
-                            Checked: {formatTime(visit.checked_in_at)}
-                          </div>
-                        )}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                         <div className="flex space-x-2">
@@ -1013,27 +806,10 @@ export const AdminPage: React.FC = () => {
                 </tbody>
               </table>
 
-              {filteredAndSortedVisits.length === 0 && (
+              {filteredVisits.length === 0 && (
                 <div className="text-center py-12">
                   <Users className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                  <p className="text-gray-500">
-                    {visits.length === 0 ? 'No visits today' : 'No visits match your filters'}
-                  </p>
-                  {visits.length > 0 && filteredAndSortedVisits.length === 0 && (
-                    <Button
-                      variant="outline"
-                      onClick={() => {
-                        setSearchQuery('');
-                        setStatusFilter('');
-                        setDepartmentFilter('');
-                        setDateFilter('');
-                        setPaymentFilter('');
-                      }}
-                      className="mt-4"
-                    >
-                      Clear Filters
-                    </Button>
-                  )}
+                  <p className="text-gray-500">{t('no_visits_found')}</p>
                 </div>
               )}
             </div>
@@ -1094,11 +870,7 @@ export const AdminPage: React.FC = () => {
                   </div>
                   <div className="flex justify-between">
                     <span className="text-gray-600">Phone:</span>
-                    <span className="font-medium">
-                      <a href={`tel:${selectedVisit.patient?.phone}`} className="text-blue-600 hover:underline">
-                        {selectedVisit.patient?.phone}
-                      </a>
-                    </span>
+                    <span className="font-medium">{selectedVisit.patient?.phone}</span>
                   </div>
                 </div>
               </div>
@@ -1190,7 +962,7 @@ export const AdminPage: React.FC = () => {
                   variant="secondary"
                   onClick={async () => {
                     // Get department fee
-                    const { data: dept } = await supabase.from('departments').select('consultation_fee').eq('name', selectedVisit.department).single();
+                    const dept = departmentStats.find(d => d.department === selectedVisit.department);
                     setPaymentAmount((dept?.consultation_fee || 500).toString());
                     setShowPaymentModal(true);
                   }}
