@@ -10,7 +10,10 @@ import {
   FileText,
   CreditCard,
   Clock,
-  Activity
+  Activity,
+  Download,
+  Printer,
+  Eye
 } from 'lucide-react';
 import { Modal } from './ui/Modal';
 import { Button } from './ui/Button';
@@ -38,6 +41,8 @@ export const PatientDetailModal: React.FC<PatientDetailModalProps> = ({
   const [paymentHistory, setPaymentHistory] = useState<PaymentTransaction[]>([]);
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<'overview' | 'visits' | 'medical' | 'payments'>('overview');
+  const [showPrescriptionModal, setShowPrescriptionModal] = useState(false);
+  const [selectedPrescription, setSelectedPrescription] = useState<MedicalHistory | null>(null);
 
   useEffect(() => {
     if (isOpen && patientId) {
@@ -45,6 +50,122 @@ export const PatientDetailModal: React.FC<PatientDetailModalProps> = ({
     }
   }, [isOpen, patientId]);
 
+  const downloadPrescription = (prescription: MedicalHistory) => {
+    const prescriptionContent = `
+DIGITAL PRESCRIPTION
+====================
+
+Clinic: MediQueue Clinic
+Date: ${formatDate(prescription.created_at)}
+
+PATIENT INFORMATION:
+Name: ${patient?.name}
+Age: ${patient?.age}
+Phone: ${patient?.phone}
+Patient ID: ${patient?.uid}
+
+DOCTOR INFORMATION:
+Doctor: ${prescription.doctor?.name || 'N/A'}
+Specialization: ${prescription.doctor?.specialization || 'N/A'}
+
+DIAGNOSIS:
+${prescription.diagnosis || 'Not specified'}
+
+PRESCRIPTION:
+${prescription.prescription || 'No prescription provided'}
+
+ADDITIONAL NOTES:
+${prescription.notes || 'No additional notes'}
+
+---
+This is a digitally generated prescription.
+Generated on: ${formatDate(new Date().toISOString())}
+    `.trim();
+
+    const blob = new Blob([prescriptionContent], { type: 'text/plain' });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `prescription-${patient?.name}-${formatDate(prescription.created_at)}.txt`;
+    link.click();
+    window.URL.revokeObjectURL(url);
+  };
+
+  const printPrescription = (prescription: MedicalHistory) => {
+    const printContent = `
+      <div style="font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px;">
+        <div style="text-align: center; border-bottom: 2px solid #333; padding-bottom: 20px; margin-bottom: 20px;">
+          <h1 style="color: #2563eb; margin: 0;">MediQueue Clinic</h1>
+          <p style="margin: 5px 0;">Digital Prescription</p>
+          <p style="margin: 5px 0;">Date: ${formatDate(prescription.created_at)}</p>
+        </div>
+        
+        <div style="margin-bottom: 20px;">
+          <h3 style="color: #333; border-bottom: 1px solid #ccc; padding-bottom: 5px;">Patient Information</h3>
+          <p><strong>Name:</strong> ${patient?.name}</p>
+          <p><strong>Age:</strong> ${patient?.age}</p>
+          <p><strong>Phone:</strong> ${patient?.phone}</p>
+          <p><strong>Patient ID:</strong> ${patient?.uid}</p>
+        </div>
+
+        <div style="margin-bottom: 20px;">
+          <h3 style="color: #333; border-bottom: 1px solid #ccc; padding-bottom: 5px;">Doctor Information</h3>
+          <p><strong>Doctor:</strong> ${prescription.doctor?.name || 'N/A'}</p>
+          <p><strong>Specialization:</strong> ${prescription.doctor?.specialization || 'N/A'}</p>
+        </div>
+
+        <div style="margin-bottom: 20px;">
+          <h3 style="color: #333; border-bottom: 1px solid #ccc; padding-bottom: 5px;">Diagnosis</h3>
+          <p>${prescription.diagnosis || 'Not specified'}</p>
+        </div>
+
+        <div style="margin-bottom: 20px;">
+          <h3 style="color: #333; border-bottom: 1px solid #ccc; padding-bottom: 5px;">Prescription</h3>
+          <div style="white-space: pre-wrap; font-family: monospace; background: #f5f5f5; padding: 15px; border-radius: 5px;">
+${prescription.prescription || 'No prescription provided'}
+          </div>
+        </div>
+
+        ${prescription.notes ? `
+          <div style="margin-bottom: 20px;">
+            <h3 style="color: #333; border-bottom: 1px solid #ccc; padding-bottom: 5px;">Additional Notes</h3>
+            <p>${prescription.notes}</p>
+          </div>
+        ` : ''}
+
+        <div style="margin-top: 40px; text-align: center; border-top: 1px solid #ccc; padding-top: 20px;">
+          <p style="margin: 0;"><strong>Dr. ${prescription.doctor?.name || 'N/A'}</strong></p>
+          <p style="margin: 5px 0;">${prescription.doctor?.qualification || ''}</p>
+          <p style="margin: 5px 0; font-size: 12px; color: #666;">This is a digitally generated prescription</p>
+        </div>
+      </div>
+    `;
+
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      printWindow.document.write(`
+        <html>
+          <head>
+            <title>Prescription - ${patient?.name}</title>
+            <style>
+              @media print {
+                body { margin: 0; }
+                .no-print { display: none; }
+              }
+            </style>
+          </head>
+          <body>
+            ${printContent}
+            <div class="no-print" style="text-align: center; margin-top: 20px;">
+              <button onclick="window.print()" style="padding: 10px 20px; background: #2563eb; color: white; border: none; border-radius: 5px; cursor: pointer;">Print</button>
+              <button onclick="window.close()" style="padding: 10px 20px; background: #6b7280; color: white; border: none; border-radius: 5px; cursor: pointer; margin-left: 10px;">Close</button>
+            </div>
+          </body>
+        </html>
+      `);
+      printWindow.document.close();
+    }
+  };
   const fetchPatientDetails = async () => {
     setLoading(true);
     try {
@@ -426,6 +547,32 @@ export const PatientDetailModal: React.FC<PatientDetailModalProps> = ({
                               <p className="text-sm text-gray-600">Dr. {record.doctor.name}</p>
                             )}
                           </div>
+                          <div className="flex space-x-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => {
+                                setSelectedPrescription(record);
+                                setShowPrescriptionModal(true);
+                              }}
+                            >
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => downloadPrescription(record)}
+                            >
+                              <Download className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => printPrescription(record)}
+                            >
+                              <Printer className="h-4 w-4" />
+                            </Button>
+                          </div>
                         </div>
 
                         {record.diagnosis && (
@@ -438,7 +585,9 @@ export const PatientDetailModal: React.FC<PatientDetailModalProps> = ({
                         {record.prescription && (
                           <div className="mb-3">
                             <h5 className="font-medium text-gray-900 mb-1">Prescription:</h5>
-                            <p className="text-sm text-gray-700 bg-green-50 p-2 rounded">{record.prescription}</p>
+                            <div className="text-sm text-gray-700 bg-green-50 p-2 rounded max-h-32 overflow-y-auto">
+                              <pre className="whitespace-pre-wrap font-sans">{record.prescription}</pre>
+                            </div>
                           </div>
                         )}
 
@@ -510,6 +659,88 @@ export const PatientDetailModal: React.FC<PatientDetailModalProps> = ({
             </div>
           </>
         )}
+
+        {/* Prescription Detail Modal */}
+        <Modal
+          isOpen={showPrescriptionModal}
+          onClose={() => {
+            setShowPrescriptionModal(false);
+            setSelectedPrescription(null);
+          }}
+          title="Prescription Details"
+          size="lg"
+        >
+          {selectedPrescription && (
+            <div className="space-y-6">
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <h4 className="font-medium text-blue-900 mb-2">
+                  Prescription from {formatDate(selectedPrescription.created_at)}
+                </h4>
+                <p className="text-sm text-blue-800">
+                  Doctor: {selectedPrescription.doctor?.name || 'N/A'} | 
+                  Patient: {patient?.name}
+                </p>
+              </div>
+
+              {selectedPrescription.diagnosis && (
+                <div>
+                  <h5 className="font-medium text-gray-900 mb-2">Diagnosis:</h5>
+                  <div className="bg-blue-50 p-3 rounded-lg">
+                    <p className="text-gray-800">{selectedPrescription.diagnosis}</p>
+                  </div>
+                </div>
+              )}
+
+              {selectedPrescription.prescription && (
+                <div>
+                  <h5 className="font-medium text-gray-900 mb-2">Prescription:</h5>
+                  <div className="bg-green-50 p-3 rounded-lg border border-green-200">
+                    <pre className="whitespace-pre-wrap font-sans text-gray-800 text-sm">
+                      {selectedPrescription.prescription}
+                    </pre>
+                  </div>
+                </div>
+              )}
+
+              {selectedPrescription.notes && (
+                <div>
+                  <h5 className="font-medium text-gray-900 mb-2">Additional Notes:</h5>
+                  <div className="bg-gray-50 p-3 rounded-lg">
+                    <p className="text-gray-800">{selectedPrescription.notes}</p>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex space-x-3">
+                <Button
+                  variant="outline"
+                  onClick={() => downloadPrescription(selectedPrescription)}
+                  className="flex-1"
+                >
+                  <Download className="h-4 w-4 mr-2" />
+                  Download
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => printPrescription(selectedPrescription)}
+                  className="flex-1"
+                >
+                  <Printer className="h-4 w-4 mr-2" />
+                  Print
+                </Button>
+                <Button
+                  onClick={() => {
+                    setShowPrescriptionModal(false);
+                    setSelectedPrescription(null);
+                  }}
+                  className="flex-1"
+                >
+                  Close
+                </Button>
+              </div>
+            </div>
+          )}
+        </Modal>
       </div>
     </Modal>
   );
